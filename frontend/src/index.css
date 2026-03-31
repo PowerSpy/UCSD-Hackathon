@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-cream text-ink antialiased min-h-screen;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-sage;
+}
