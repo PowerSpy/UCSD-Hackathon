@@ -124,6 +124,73 @@ export async function postLessonGenerate(body: {
   return j("/lesson/generate", { method: "POST", body: JSON.stringify(body) });
 }
 
+export type LessonGenStreamEvent = {
+  type: "outline" | "progress" | "done";
+  outline?: string[];
+  total?: number;
+  current?: number;
+  section_name?: string;
+  session_id?: string;
+  topic?: string;
+  title?: string;
+  section?: Record<string, unknown>;
+  section_index?: number;
+  total_sections?: number;
+};
+
+export async function postLessonGenerateStream(
+  body: {
+    topic: string;
+    grade_level: GradeBand;
+    session_id: string;
+    student_id: string;
+  },
+  onEvent: (event: LessonGenStreamEvent) => void
+): Promise<void> {
+  const r = await fetch(`${API_BASE}/lesson/generate/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t || r.statusText);
+  }
+  const reader = r.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    for (;;) {
+      const sep = buffer.indexOf("\n\n");
+      if (sep === -1) break;
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+
+      for (const line of block.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.replace(/^data:\s?/, "").trim();
+        if (!raw) continue;
+        try {
+          const data = JSON.parse(raw) as LessonGenStreamEvent;
+          onEvent(data);
+        } catch {
+          continue;
+        }
+      }
+    }
+  }
+}
+
 export type LessonNextRes = {
   section: Record<string, unknown>;
   section_index: number;
@@ -144,8 +211,7 @@ export type QuizGenRes = { topic: string; questions: Record<string, unknown>[] }
 export async function postQuizGenerate(body: {
   topic: string;
   grade_level: GradeBand;
-  session_id?: string;
-  student_id: string;
+  student_id?: string;
   prior_performance?: string;
 }): Promise<QuizGenRes> {
   return j("/quiz/generate", { method: "POST", body: JSON.stringify(body) });

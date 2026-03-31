@@ -51,6 +51,21 @@ class TopicProgress(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class LessonHistory(Base):
+    __tablename__ = "lesson_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(128), ForeignKey("lesson_sessions.session_id"), index=True)
+    student_id: Mapped[str] = mapped_column(String(64), ForeignKey("students.id"), index=True)
+    section_index: Mapped[int] = mapped_column(Integer)
+    section_name: Mapped[str] = mapped_column(String(512))
+    subsection_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    section_type: Mapped[str] = mapped_column(String(50))  # intro, example, practice
+    content: Mapped[str] = mapped_column(Text)
+    practice_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 def parse_json_list(s: str | None) -> list[Any]:
     if not s:
         return []

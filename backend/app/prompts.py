@@ -55,6 +55,7 @@ Return ONLY valid JSON with this shape (no markdown fences):
   "section": {{
     "type": "intro" | "example" | "practice",
     "title": "string",
+    "subsection_name": "string — a brief descriptive name for this specific subsection/topic within the section",
     "body": "markdown string — teach this section only",
     "practice_prompt": "string or null — a single prompt for the student to try, if type is practice"
   }}
@@ -64,7 +65,8 @@ Rules:
 - For the FIRST call, section.type should be "intro".
 - Each section builds toward understanding; do not dump the whole lesson.
 - Never include final answers for practice problems in "body" or "practice_prompt"; scaffold only.
-- "outline" must list all planned sections (typically: intro, example, guided practice)."""
+- "outline" must list all planned sections (typically: intro, example, guided practice).
+- "subsection_name" should describe the specific concept or focus area being covered in this section."""
 
 
 def lesson_next_system(grade_band: str) -> str:
@@ -76,6 +78,7 @@ Return ONLY valid JSON (no markdown fences):
   "section": {{
     "type": "intro" | "example" | "practice",
     "title": "string",
+    "subsection_name": "string — a brief descriptive name for this specific subsection/topic within the section",
     "body": "markdown string",
     "practice_prompt": "string or null"
   }},
@@ -83,7 +86,8 @@ Return ONLY valid JSON (no markdown fences):
 }}
 
 Set is_last_section true when this section is the final planned part (usually after guided practice).
-Never reveal final answers for student exercises."""
+Never reveal final answers for student exercises.
+"subsection_name" should describe the specific concept or focus area being covered in this section."""
 
 
 def quiz_generation_system(grade_band: str, topic: str) -> str:

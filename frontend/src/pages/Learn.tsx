@@ -1,8 +1,8 @@
-import { postChatStream, postLessonGenerate, postLessonNext, postProgressUpdate } from "@/lib/api";
+import { postChatStream, postLessonGenerateStream, postLessonNext, postProgressUpdate, type LessonGenStreamEvent } from "@/lib/api";
 import { ChatPanel, type ChatMessage } from "@/components/ChatPanel";
 import { Markdown } from "@/components/Markdown";
 import { getGradeBand, getStudentId, newSessionId, slugTopic } from "@/lib/student";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -21,6 +21,7 @@ export function Learn() {
   const [sectionIndex, setSectionIndex] = useState(0);
   const [currentSection, setCurrentSection] = useState<Section | null>(null);
   const [loadingLesson, setLoadingLesson] = useState(false);
+  const [generatingProgress, setGeneratingProgress] = useState<{ current: number; total: number } | null>(null);
   const [loadingNext, setLoadingNext] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
 
@@ -38,28 +39,39 @@ export function Learn() {
     const t = topic.trim();
     if (!t || loadingLesson) return;
     setLoadingLesson(true);
+    setGeneratingProgress(null);
     const sid = newSessionId();
     setSessionId(sid);
     setChatSessionId(newSessionId());
     try {
-      const res = await postLessonGenerate({
+      await postLessonGenerateStream({
         topic: t,
         grade_level: grade,
         session_id: sid,
         student_id: studentId,
+      }, (event: LessonGenStreamEvent) => {
+        // Handle progress updates
+        if (event.type === "progress" && event.current !== undefined && event.total !== undefined) {
+          setGeneratingProgress({ current: event.current, total: event.total });
+        } else if (event.type === "done") {
+          setLessonTitle(event.title || "");
+          setOutline(event.outline || []);
+          setSectionIndex(event.section_index ?? 0);
+          setCurrentSection(event.section || null);
+          setPhase("lesson");
+          setGeneratingProgress(null);
+          setMessages([
+            {
+              role: "assistant",
+              content: `We're starting **${event.title}**. Use this chat anytime you're stuck — I'll answer with questions and hints.`,
+            },
+          ]);
+        } else if (event.type === "outline" && event.outline) {
+          setOutline(event.outline);
+        }
       });
-      setLessonTitle(res.title);
-      setOutline(res.outline);
-      setSectionIndex(res.section_index);
-      setCurrentSection(res.section);
-      setPhase("lesson");
-      setMessages([
-        {
-          role: "assistant",
-          content: `We're starting **${res.title}**. Use this chat anytime you're stuck — I'll answer with questions and hints.`,
-        },
-      ]);
     } catch (err) {
+      setGeneratingProgress(null);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: `Could not start the lesson: ${String(err)}. Check that the API is running.` },
@@ -90,6 +102,16 @@ export function Learn() {
     } finally {
       setLoadingNext(false);
     }
+  }
+
+  function handlePrevious() {
+    if (sectionIndex > 0) {
+      setSectionIndex(sectionIndex - 1);
+    }
+  }
+
+  function jumpToSection(index: number) {
+    setSectionIndex(index);
   }
 
   async function handleChatSend(text: string) {
@@ -184,6 +206,21 @@ export function Learn() {
               )}
             </button>
           </form>
+          {generatingProgress && (
+            <div className="mt-8 rounded-lg bg-sage/10 p-4">
+              <p className="text-sm font-medium text-sageDark">
+                Generating section {generatingProgress.current + 1} of {generatingProgress.total}...
+              </p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-sage/20">
+                <div
+                  className="h-full bg-sage transition-all duration-300"
+                  style={{
+                    width: `${((generatingProgress.current + 1) / generatingProgress.total) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </main>
     );
@@ -219,6 +256,17 @@ export function Learn() {
             </div>
           )}
           <div className="mt-10 flex flex-wrap gap-3">
+            {sectionIndex > 0 && (
+              <button
+                type="button"
+                onClick={handlePrevious}
+                disabled={loadingNext}
+                className="inline-flex items-center gap-2 rounded-full bg-slate-200 px-6 py-3 text-lg font-semibold text-ink shadow-sm transition hover:bg-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-5 w-5" aria-hidden />
+                Previous
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void handleNext()}
@@ -239,6 +287,29 @@ export function Learn() {
             </button>
           </div>
         </article>
+
+        {/* Section navigation bubbles */}
+        {outline.length > 0 && (
+          <div className="mt-8 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-sage/15">
+            <p className="mb-3 text-sm font-semibold text-slate-600">Jump to section:</p>
+            <div className="flex flex-wrap gap-2">
+              {outline.map((sectionName, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => jumpToSection(idx)}
+                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                    idx === sectionIndex
+                      ? "bg-sage text-white shadow-md ring-2 ring-sage"
+                      : "bg-sage/10 text-sageDark hover:bg-sage/20 ring-1 ring-sage/20"
+                  }`}
+                  title={sectionName}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className={`h-[min(40vh,420px)] w-full shrink-0 md:h-auto md:w-[min(100%,380px)]`}>
         <ChatPanel

@@ -60,7 +60,6 @@ class LessonNextResponse(BaseModel):
 class QuizGenerateRequest(BaseModel):
     topic: str
     grade_level: str = "6-8"
-    session_id: str | None = None
     student_id: str | None = None
     prior_performance: str | None = None
 
@@ -109,3 +108,20 @@ class ProgressUpdateBody(BaseModel):
     hints_increment: int = 0
     topic_slug: str | None = None
     topic_title: str | None = None
+
+
+class LessonSectionHistoryItem(BaseModel):
+    section_index: int
+    section_name: str
+    subsection_name: str | None
+    section_type: str
+    content: str
+    practice_prompt: str | None
+    created_at: str
+
+
+class LessonHistoryResponse(BaseModel):
+    session_id: str
+    topic: str
+    student_id: str
+    sections: list[LessonSectionHistoryItem]
