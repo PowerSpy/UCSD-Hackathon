@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -13,13 +14,36 @@ from app.prompts import (
 )
 
 
+def _openai_compat_credentials() -> tuple[str, str, str]:
+    """Returns (api_key, base_url_without_trailing_slash, model) for OpenAI-compatible providers."""
+    p = (settings.llm_provider or "zai").lower()
+    if p == "zai":
+        if not settings.zai_api_key:
+            raise RuntimeError("ZAI_API_KEY is not set")
+        return (
+            settings.zai_api_key,
+            settings.zai_base_url.rstrip("/"),
+            settings.zai_model,
+        )
+    if p == "openai":
+        if not settings.openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        return (
+            settings.openai_api_key,
+            settings.openai_base_url.rstrip("/"),
+            settings.openai_model,
+        )
+    raise RuntimeError(
+        f"llm_provider={settings.llm_provider!r} does not use OpenAI-compatible chat; use anthropic or set llm_provider to zai|openai"
+    )
+
+
 async def _openai_chat(messages: list[dict[str, str]], temperature: float = 0.7) -> str:
-    if not settings.openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-    url = f"{settings.openai_base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {settings.openai_api_key}", "Content-Type": "application/json"}
+    api_key, base, model = _openai_compat_credentials()
+    url = f"{base}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {
-        "model": settings.openai_model,
+        "model": model,
         "messages": messages,
         "temperature": temperature,
     }
@@ -28,6 +52,39 @@ async def _openai_chat(messages: list[dict[str, str]], temperature: float = 0.7)
         r.raise_for_status()
         data = r.json()
         return data["choices"][0]["message"]["content"]
+
+
+async def _openai_chat_stream(
+    messages: list[dict[str, str]], temperature: float = 0.7
+) -> AsyncIterator[str]:
+    """Stream text deltas from OpenAI-compatible chat completion (incl. Z.AI)."""
+    api_key, base, model = _openai_compat_credentials()
+    url = f"{base}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                raw = line[5:].strip()
+                if raw == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                for ch in chunk.get("choices") or []:
+                    delta = ch.get("delta") or {}
+                    piece = delta.get("content")
+                    if piece:
+                        yield piece
 
 
 async def _anthropic_chat(system: str, messages: list[dict[str, str]], temperature: float = 0.7) -> str:
@@ -55,7 +112,7 @@ async def _anthropic_chat(system: str, messages: list[dict[str, str]], temperatu
 
 
 async def chat_complete(system: str, user: str, temperature: float = 0.7) -> str:
-    if settings.llm_provider == "anthropic":
+    if (settings.llm_provider or "").lower() == "anthropic":
         return await _anthropic_chat(system, [{"role": "user", "content": user}], temperature)
     return await _openai_chat(
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -91,7 +148,7 @@ async def socratic_reply(
     parts.append(f"Student message:\n{user_message}")
     user_content = "\n".join(parts)
 
-    if settings.llm_provider == "anthropic":
+    if (settings.llm_provider or "").lower() == "anthropic":
         msgs: list[dict[str, str]] = []
         if history:
             for h in history[-8:]:
@@ -104,16 +161,46 @@ async def socratic_reply(
         for h in history[-8:]:
             openai_messages.append({"role": h["role"], "content": h["content"]})
     openai_messages.append({"role": "user", "content": user_content})
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
-        url = f"{settings.openai_base_url.rstrip('/')}/chat/completions"
-        headers = {"Authorization": f"Bearer {settings.openai_api_key}", "Content-Type": "application/json"}
-        body = {"model": settings.openai_model, "messages": openai_messages, "temperature": 0.6}
-        r = await client.post(url, headers=headers, json=body)
-        r.raise_for_status()
-        data = r.json()
-        return data["choices"][0]["message"]["content"]
+    return await _openai_chat(openai_messages, temperature=0.6)
+
+
+async def socratic_reply_stream(
+    *,
+    grade_band: str,
+    user_message: str,
+    lesson_context: str | None,
+    hint_level: int,
+    history: list[dict[str, str]] | None = None,
+) -> AsyncIterator[str]:
+    system = socratic_system_prompt(grade_band, hint_level=hint_level)
+    parts = []
+    if lesson_context:
+        parts.append(
+            f"Current lesson context (for alignment, do not repeat verbatim):\n{lesson_context}\n"
+        )
+    parts.append(f"Student message:\n{user_message}")
+    user_content = "\n".join(parts)
+
+    try:
+        if (settings.llm_provider or "").lower() == "anthropic":
+            msgs: list[dict[str, str]] = []
+            if history:
+                for h in history[-8:]:
+                    msgs.append({"role": h["role"], "content": h["content"]})
+            msgs.append({"role": "user", "content": user_content})
+            text = await _anthropic_chat(system, msgs, temperature=0.6)
+            yield text
+            return
+
+        openai_messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+        if history:
+            for h in history[-8:]:
+                openai_messages.append({"role": h["role"], "content": h["content"]})
+        openai_messages.append({"role": "user", "content": user_content})
+        async for piece in _openai_chat_stream(openai_messages, temperature=0.6):
+            yield piece
+    except (RuntimeError, httpx.HTTPError, httpx.StreamError):
+        yield offline_socratic_fallback(grade_band, hint_level)
 
 
 async def generate_first_lesson_section(topic: str, grade_band: str) -> dict[str, Any]:
@@ -152,7 +239,7 @@ async def generate_quiz(topic: str, grade_band: str, performance_note: str | Non
 
 def offline_socratic_fallback(grade_band: str, hint_level: int) -> str:
     return (
-        f"[Demo mode — add OPENAI_API_KEY or ANTHROPIC_API_KEY] "
+        f"[Demo mode — set ZAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY] "
         f"I'm your Socratic tutor ({grade_band}). What part feels unclear so far — the words, the steps, or where to start? "
         f"Try naming one thing you notice about the problem. "
         + ("Here's a gentler angle: break the question into two smaller questions. What's the first small piece? " if hint_level >= 3 else "")

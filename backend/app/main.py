@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
@@ -158,6 +159,74 @@ async def chat_endpoint(body: ChatRequest, db: Session = Depends(get_db)):
         lesson_data=None,
         hint_level=hint_level,
         frustration_detected=frustration,
+    )
+
+
+def _sse_event(obj: dict[str, Any]) -> str:
+    return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(body: ChatRequest):
+    """SSE stream of assistant tokens; final event has type ``done`` and metadata."""
+    grade = body.grade_level if body.grade_level in ("K-5", "6-8", "9-12") else "6-8"
+    sid = body.session_id
+    state = CHAT_STATE.setdefault(sid, {"messages": [], "failed_streak": 0})
+
+    if _detect_frustration(body.message):
+        state["failed_streak"] += 1
+    else:
+        if len(body.message) > 40 and "?" in body.message:
+            state["failed_streak"] = max(0, state["failed_streak"] - 1)
+
+    hint_level = _hint_level_from_streak(state["failed_streak"])
+    frustration = state["failed_streak"] >= 3
+
+    ctx_parts = []
+    if body.lesson_context:
+        lc = body.lesson_context
+        if lc.topic:
+            ctx_parts.append(f"Topic: {lc.topic}")
+        if lc.section_title:
+            ctx_parts.append(f"Section: {lc.section_title}")
+        if lc.section_summary:
+            ctx_parts.append(f"Summary: {lc.section_summary}")
+    lesson_context = "\n".join(ctx_parts) if ctx_parts else None
+
+    history = state["messages"]
+
+    async def event_gen():
+        parts: list[str] = []
+        async for piece in llm.socratic_reply_stream(
+            grade_band=grade,
+            user_message=body.message,
+            lesson_context=lesson_context,
+            hint_level=hint_level,
+            history=history,
+        ):
+            parts.append(piece)
+            yield _sse_event({"type": "content", "content": piece})
+        text = "".join(parts)
+        state["messages"].append({"role": "user", "content": body.message})
+        state["messages"].append({"role": "assistant", "content": text})
+        if len(state["messages"]) > 40:
+            state["messages"] = state["messages"][-40:]
+        yield _sse_event(
+            {
+                "type": "done",
+                "hint_level": hint_level,
+                "frustration_detected": frustration,
+            }
+        )
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

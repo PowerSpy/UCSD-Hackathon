@@ -1,4 +1,4 @@
-import { postChat, postLessonGenerate, postLessonNext, postProgressUpdate } from "@/lib/api";
+import { postChatStream, postLessonGenerate, postLessonNext, postProgressUpdate } from "@/lib/api";
 import { ChatPanel, type ChatMessage } from "@/components/ChatPanel";
 import { Markdown } from "@/components/Markdown";
 import { getGradeBand, getStudentId, newSessionId, slugTopic } from "@/lib/student";
@@ -93,31 +93,56 @@ export function Learn() {
   }
 
   async function handleChatSend(text: string) {
-    setMessages((m) => [...m, { role: "user", content: text }]);
+    setMessages((m) => [...m, { role: "user", content: text }, { role: "assistant", content: "" }]);
     const body = (currentSection?.body as string) || "";
     const summary = body.slice(0, 280);
-    const res = await postChat({
-      message: text,
-      session_id: chatSessionId,
-      grade_level: grade,
-      lesson_context: {
-        topic: lessonTitle || topic,
-        section_title: (currentSection?.title as string) || undefined,
-        section_summary: summary || undefined,
-      },
-    });
-    if (res.frustration_detected) {
-      try {
-        await postProgressUpdate(studentId, {
-          hints_increment: 1,
-          topic_slug: slugTopic(topic || lessonTitle),
-          topic_title: lessonTitle || topic,
-        });
-      } catch {
-        /* offline */
+    try {
+      const res = await postChatStream(
+        {
+          message: text,
+          session_id: chatSessionId,
+          grade_level: grade,
+          lesson_context: {
+            topic: lessonTitle || topic,
+            section_title: (currentSection?.title as string) || undefined,
+            section_summary: summary || undefined,
+          },
+        },
+        (chunk) => {
+          setMessages((m) => {
+            if (m.length === 0) return m;
+            const next = [...m];
+            const last = next[next.length - 1];
+            if (last?.role !== "assistant") return m;
+            next[next.length - 1] = { role: "assistant", content: last.content + chunk };
+            return next;
+          });
+        }
+      );
+      if (res.frustration_detected) {
+        try {
+          await postProgressUpdate(studentId, {
+            hints_increment: 1,
+            topic_slug: slugTopic(topic || lessonTitle),
+            topic_title: lessonTitle || topic,
+          });
+        } catch {
+          /* offline */
+        }
       }
+    } catch (err) {
+      setMessages((m) => {
+        const next = [...m];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant") {
+          next[next.length - 1] = {
+            role: "assistant",
+            content: last.content || `Could not reach the tutor: ${String(err)}`,
+          };
+        }
+        return next;
+      });
     }
-    setMessages((m) => [...m, { role: "assistant", content: res.response }]);
   }
 
   if (phase === "centered") {

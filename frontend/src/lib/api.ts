@@ -1,9 +1,10 @@
 import type { GradeBand } from "./student";
 
-const base = () => import.meta.env.VITE_API_URL || "";
+/** Empty in dev → same-origin requests use Vite proxy to the FastAPI server. */
+const API_BASE = typeof import.meta.env.VITE_API_URL === "string" ? import.meta.env.VITE_API_URL : "";
 
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${base}${path}`, {
+  const r = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -25,7 +26,7 @@ export type ChatRes = {
   frustration_detected: boolean;
 };
 
-export async function postChat(body: {
+export type ChatRequestBody = {
   message: string;
   session_id: string;
   grade_level: GradeBand;
@@ -34,8 +35,74 @@ export async function postChat(body: {
     section_title?: string;
     section_summary?: string;
   };
-}): Promise<ChatRes> {
+};
+
+export async function postChat(body: ChatRequestBody): Promise<ChatRes> {
   return j("/chat", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** Server-sent events: `content` chunks, then final `done` with metadata. */
+export async function postChatStream(
+  body: ChatRequestBody,
+  onDelta: (chunk: string) => void
+): Promise<{ hint_level: number; frustration_detected: boolean }> {
+  const r = await fetch(`${API_BASE}/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(t || r.statusText);
+  }
+  const reader = r.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let meta = { hint_level: 0, frustration_detected: false };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    for (;;) {
+      const sep = buffer.indexOf("\n\n");
+      if (sep === -1) break;
+      const block = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+
+      for (const line of block.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.replace(/^data:\s?/, "").trim();
+        if (!raw) continue;
+        let data: {
+          type?: string;
+          content?: string;
+          hint_level?: number;
+          frustration_detected?: boolean;
+        };
+        try {
+          data = JSON.parse(raw) as typeof data;
+        } catch {
+          continue;
+        }
+        if (data.type === "content" && data.content) onDelta(data.content);
+        if (data.type === "done") {
+          meta = {
+            hint_level: data.hint_level ?? 0,
+            frustration_detected: Boolean(data.frustration_detected),
+          };
+        }
+      }
+    }
+  }
+
+  return meta;
 }
 
 export type LessonGenRes = {

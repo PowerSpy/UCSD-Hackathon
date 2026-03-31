@@ -10,6 +10,10 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/chat/stream": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
       "/chat": "http://127.0.0.1:8000",
       "/lesson": "http://127.0.0.1:8000",
       "/quiz": "http://127.0.0.1:8000",

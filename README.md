@@ -1,6 +1,6 @@
 # Socratic Learning Companion
 
-A full-stack K–12 learning app where an AI tutor **never gives direct answers** — it guides with questions, hints, and scaffolded reasoning. Built with **React (TypeScript) + Vite**, **FastAPI**, **SQLite**, and **OpenAI or Anthropic** APIs.
+A full-stack K–12 learning app where an AI tutor **never gives direct answers** — it guides with questions, hints, and scaffolded reasoning. Built with **React (TypeScript) + Vite**, **FastAPI**, **SQLite**, and **Z.AI** (OpenAI-compatible), **OpenAI**, or **Anthropic** APIs.
 
 ## Features
 
@@ -21,7 +21,8 @@ docs/         Socratic prompt rationale (see SOCRATIC_PROMPTS.md)
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| `POST` | `/chat` | Socratic reply; tracks frustration / hint level |
+| `POST` | `/chat` | Socratic reply (full JSON body) |
+| `POST` | `/chat/stream` | Same body; **SSE** (`text/event-stream`) with token events and a final `done` event |
 | `POST` | `/lesson/generate` | First lesson section + outline |
 | `POST` | `/lesson/next` | Next section after student completes current |
 | `POST` | `/quiz/generate` | Quiz JSON for a topic |
@@ -41,7 +42,7 @@ python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env
-# Set OPENAI_API_KEY (or use Anthropic — see .env.example)
+# Default: Z.AI — set ZAI_API_KEY in .env (see .env.example). Or LLM_PROVIDER=openai / anthropic.
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
