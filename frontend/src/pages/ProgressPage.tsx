@@ -1,3 +1,4 @@
+import { ProgressImprovementDemo } from "@/components/ProgressImprovementDemo";
 import { getProgress, postProgressUpdate } from "@/lib/api";
 import { getGradeBand, getStudentId, setGradeBand, type GradeBand } from "@/lib/student";
 import { useEffect, useState } from "react";
@@ -53,6 +54,8 @@ export function ProgressPage() {
           ))}
         </div>
       </section>
+
+      <ProgressImprovementDemo />
 
       {data && (
         <>
