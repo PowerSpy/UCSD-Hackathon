@@ -67,6 +67,7 @@ class QuizGenerateRequest(BaseModel):
 class QuizGenerateResponse(BaseModel):
     topic: str
     questions: list[dict[str, Any]]
+    explanations: dict[str, str] = {}  # question_id -> explanation for wrong answer
 
 
 class QuizSubmitRequest(BaseModel):
@@ -75,6 +76,7 @@ class QuizSubmitRequest(BaseModel):
     student_id: str | None = None
     answers: dict[str, str] = Field(default_factory=dict)  # question_id -> answer text
     questions: list[dict[str, Any]] = Field(default_factory=list)
+    explanations: dict[str, str] = Field(default_factory=dict)  # question_id -> explanation
 
 
 class QuizSubmitResponse(BaseModel):
@@ -125,3 +127,18 @@ class LessonHistoryResponse(BaseModel):
     topic: str
     student_id: str
     sections: list[LessonSectionHistoryItem]
+
+
+class PastLessonItem(BaseModel):
+    session_id: str
+    topic: str
+    title: str
+    created_at: str | None
+    section_count: int
+    current_index: int
+    completed: bool
+
+
+class PastLessonsResponse(BaseModel):
+    student_id: str
+    lessons: list[PastLessonItem]

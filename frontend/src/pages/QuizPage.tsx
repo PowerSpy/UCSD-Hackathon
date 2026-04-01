@@ -15,6 +15,7 @@ export function QuizPage() {
   const studentId = useMemo(() => getStudentId(), []);
 
   const [questions, setQuestions] = useState<Q[]>([]);
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -31,7 +32,10 @@ export function QuizPage() {
     (async () => {
       try {
         const res = await postQuizGenerate({ topic, grade_level: grade, student_id: studentId });
-        if (!cancelled) setQuestions(res.questions || []);
+        if (!cancelled) {
+          setQuestions(res.questions || []);
+          setExplanations(res.explanations || {});
+        }
       } catch {
         if (!cancelled) setQuestions([]);
       } finally {
@@ -66,9 +70,12 @@ export function QuizPage() {
     } else {
       ok = ans.trim().length > 0 && correct.toLowerCase().split(/\s+/).some((w) => w.length > 3 && ans.toLowerCase().includes(w));
     }
+    const encouragement = ok 
+      ? "Great job! That's correct."
+      : (explanations[id] || "That's okay — use the lesson ideas and try another angle.");
     setFeedback({
       correct: ok,
-      encouragement: ok ? "Nice work — you connected this to what you learned." : "That's okay — use the lesson ideas and try another angle.",
+      encouragement,
     });
   }
 
@@ -87,6 +94,7 @@ export function QuizPage() {
         student_id: studentId,
         answers,
         questions,
+        explanations,
       });
       setSubmitResult({ score_percent: res.score_percent, correct: res.correct, total: res.total });
     } catch {

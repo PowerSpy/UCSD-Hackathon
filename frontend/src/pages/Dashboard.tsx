@@ -73,6 +73,16 @@ export function Dashboard() {
         </Link>
 
         <Link
+          to="/lessons/past"
+          className="group flex flex-col rounded-2xl bg-white p-6 shadow-sm ring-1 ring-sage/15 transition hover:ring-sage/40 focus:outline-none focus:ring-2 focus:ring-sage"
+        >
+          <BookOpen className="mb-3 h-10 w-10 text-sage" aria-hidden />
+          <span className="font-display text-2xl font-semibold text-ink">Past lessons</span>
+          <span className="mt-2 text-lg text-slate-600">Continue where you left off — pick up any lesson.</span>
+          <span className="mt-4 text-sm font-medium text-sageDark underline-offset-2 group-hover:underline">View lessons →</span>
+        </Link>
+
+        <Link
           to="/progress"
           className="flex flex-col rounded-2xl bg-white p-6 shadow-sm ring-1 ring-sage/15 transition hover:ring-sage/40 focus:outline-none focus:ring-2 focus:ring-sage"
         >

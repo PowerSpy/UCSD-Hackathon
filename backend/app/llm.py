@@ -424,5 +424,9 @@ def offline_quiz_fallback(topic: str) -> dict[str, Any]:
                 "choices": None,
                 "correct": "understanding",
             },
-        ]
+        ],
+        "explanations": {
+            "q1": f"The answer is 'Build understanding you can explain' because true learning means you can explain what you know in your own words, not just memorize facts. This helps you use the knowledge in new situations.",
+            "q2": "The answer involves 'understanding' because asking questions helps you build deeper understanding instead of just memorizing. Questions help you see how ideas connect.",
+        }
     }

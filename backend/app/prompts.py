@@ -105,8 +105,13 @@ Return ONLY valid JSON (no markdown fences):
       "correct": "for MC: the exact correct choice string; for short_answer: a brief acceptable answer key phrase; for fill_blank: the exact blank text",
       "blank_hint": "string or null — only for fill_blank, optional short hint"
     }}
-  ]
+  ],
+  "explanations": {{
+    "q1": "A clear, friendly explanation of why the correct answer is right and how it relates to the topic. For example: 'The answer is X because...'. Start with 'The answer is [correct answer]' then explain why.",
+    "q2": "Another explanation following the same format..."
+  }}
 }}
 
 Include 4–6 questions, mixed types. Difficulty should match the grade band.
-For short_answer and fill_blank, keep expected answers short and unambiguous."""
+For short_answer and fill_blank, keep expected answers short and unambiguous.
+For explanations: provide a brief, kid-friendly explanation (1-2 sentences) that a student would see if they answered incorrectly. Always start with "The answer is [correct answer] because..." format."""

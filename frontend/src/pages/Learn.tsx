@@ -1,17 +1,19 @@
-import { postChatStream, postLessonGenerateStream, postLessonNext, postProgressUpdate, type LessonGenStreamEvent } from "@/lib/api";
+import { postChatStream, postLessonGenerateStream, postLessonNext, postProgressUpdate, resumeLesson, type LessonGenStreamEvent } from "@/lib/api";
 import { ChatPanel, type ChatMessage } from "@/components/ChatPanel";
 import { Markdown } from "@/components/Markdown";
-import { getGradeBand, getStudentId, newSessionId, slugTopic } from "@/lib/student";
+import { getGradeBand, getStudentId, newSessionId, slugTopic, type GradeBand } from "@/lib/student";
 import { ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
-import { FormEvent, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 type Section = Record<string, unknown>;
 
 export function Learn() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as { resumeSessionId?: string; grade?: string } | undefined;
   const studentId = useMemo(() => getStudentId(), []);
-  const grade = useMemo(() => getGradeBand(), []);
+  const grade = useMemo(() => (state?.grade as GradeBand) || getGradeBand(), [state?.grade]);
 
   const [phase, setPhase] = useState<"centered" | "lesson">("centered");
   const [topic, setTopic] = useState("");
@@ -23,6 +25,7 @@ export function Learn() {
   const [loadingLesson, setLoadingLesson] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState<{ current: number; total: number } | null>(null);
   const [loadingNext, setLoadingNext] = useState(false);
+  const [allSections, setAllSections] = useState<Section[]>([]);
   const [chatCollapsed, setChatCollapsed] = useState(false);
 
   const [chatSessionId, setChatSessionId] = useState(() => newSessionId());
@@ -33,6 +36,32 @@ export function Learn() {
         "Hi! I'm here to help you think — not to do the work for you. When you're ready, type what you want to learn below.",
     },
   ]);
+
+  // Handle resume from past lessons
+  useEffect(() => {
+    if (state?.resumeSessionId) {
+      (async () => {
+        try {
+          const res = await resumeLesson(state.resumeSessionId!);
+          setSessionId(res.session_id);
+          setLessonTitle(res.title);
+          setOutline(res.outline);
+          setSectionIndex(res.section_index);
+          setCurrentSection(res.section);
+          setPhase("lesson");
+          setChatSessionId(newSessionId());
+          setMessages([
+            {
+              role: "assistant",
+              content: `Welcome back to **${res.title}**! You're on section ${res.section_index + 1} of ${res.total_sections}. Feel free to ask questions anytime!`,
+            },
+          ]);
+        } catch (err) {
+          console.error("Failed to resume lesson:", err);
+        }
+      })();
+    }
+  }, [state?.resumeSessionId]);
 
   async function handleStart(e: FormEvent) {
     e.preventDefault();
@@ -58,6 +87,9 @@ export function Learn() {
           setOutline(event.outline || []);
           setSectionIndex(event.section_index ?? 0);
           setCurrentSection(event.section || null);
+          if (event.sections) {
+            setAllSections(event.sections);
+          }
           setPhase("lesson");
           setGeneratingProgress(null);
           setMessages([
@@ -112,6 +144,9 @@ export function Learn() {
 
   function jumpToSection(index: number) {
     setSectionIndex(index);
+    if (allSections && allSections[index]) {
+      setCurrentSection(allSections[index]);
+    }
   }
 
   async function handleChatSend(text: string) {
@@ -311,7 +346,7 @@ export function Learn() {
           </div>
         )}
       </div>
-      <div className={`h-[min(40vh,420px)] w-full shrink-0 md:h-auto md:w-[min(100%,380px)]`}>
+      <div className="flex min-h-0 w-full flex-col md:w-[min(100%,380px)]">
         <ChatPanel
           title="Tutor chat"
           messages={messages}

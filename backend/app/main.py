@@ -32,6 +32,7 @@ from app.schemas import (
     LessonNextRequest,
     LessonNextResponse,
     LessonHistoryResponse,
+    PastLessonsResponse,
     ProgressGetResponse,
     ProgressTopic,
     ProgressUpdateBody,
@@ -423,6 +424,7 @@ async def lesson_generate_stream(body: LessonGenerateRequest, db: Session = Depe
             "title": title,
             "outline": outline,
             "section": first_section,
+            "sections": all_sections,
             "section_index": 0,
             "total_sections": len(outline),
         })
@@ -502,7 +504,8 @@ async def quiz_generate(body: QuizGenerateRequest):
         perf,
     )
     questions = data.get("questions") or []
-    return QuizGenerateResponse(topic=body.topic.strip(), questions=questions)
+    explanations = data.get("explanations") or {}
+    return QuizGenerateResponse(topic=body.topic.strip(), questions=questions, explanations=explanations)
 
 
 def _score_question(q: dict[str, Any], answer: str) -> tuple[bool, str]:
@@ -531,12 +534,17 @@ async def quiz_submit(body: QuizSubmitRequest, db: Session = Depends(get_db)):
     questions = body.questions or []
     feedback: list[dict[str, Any]] = []
     correct_n = 0
+    explanations = body.explanations or {}
     for q in questions:
         qid = str(q.get("id") or "")
         ans = body.answers.get(qid, "")
-        ok, tip = _score_question(q, ans)
+        ok, _default_tip = _score_question(q, ans)
         if ok:
             correct_n += 1
+            tip = "Great job! That's correct."
+        else:
+            # Use pre-generated explanation if available, otherwise fall back to default
+            tip = explanations.get(qid, _default_tip)
         feedback.append({"question_id": qid, "correct": ok, "encouragement": tip})
 
     total = len(questions) or 1
@@ -663,5 +671,53 @@ def get_lesson_history(session_id: str, db: Session = Depends(get_db)):
         topic=row.topic,
         student_id=row.student_id,
         sections=sections,
+    )
+
+
+@app.get("/lessons/past/{student_id}", response_model=PastLessonsResponse)
+def get_past_lessons(student_id: str, db: Session = Depends(get_db)):
+    """Retrieve all past lessons for a student."""
+    lessons = db.query(LessonSession).filter_by(student_id=student_id).order_by(
+        LessonSession.created_at.desc()
+    ).all()
+    
+    past_lessons = []
+    for row in lessons:
+        outline = json.loads(row.outline_json or "[]")
+        past_lessons.append({
+            "session_id": row.session_id,
+            "topic": row.topic,
+            "title": row.topic,  # You can customize this if you store title separately
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "section_count": len(outline),
+            "current_index": row.current_index,
+            "completed": row.completed,
+        })
+    
+    return PastLessonsResponse(student_id=student_id, lessons=past_lessons)
+
+
+@app.get("/lesson/resume/{session_id}", response_model=LessonGenerateResponse)
+def resume_lesson(session_id: str, db: Session = Depends(get_db)):
+    """Resume a past lesson session."""
+    row = db.query(LessonSession).filter_by(session_id=session_id).first()
+    if not row:
+        raise HTTPException(404, "Session not found")
+    
+    outline = json.loads(row.outline_json or "[]")
+    sections = json.loads(row.sections_json or "[]")
+    current_idx = row.current_index
+    
+    # Get the current section
+    current_section = sections[current_idx] if current_idx < len(sections) else (sections[0] if sections else {})
+    
+    return LessonGenerateResponse(
+        session_id=session_id,
+        topic=row.topic,
+        title=row.topic,
+        outline=outline,
+        section=current_section,
+        section_index=current_idx,
+        total_sections=len(outline),
     )
 

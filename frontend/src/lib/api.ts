@@ -134,6 +134,7 @@ export type LessonGenStreamEvent = {
   topic?: string;
   title?: string;
   section?: Record<string, unknown>;
+  sections?: Record<string, unknown>[];
   section_index?: number;
   total_sections?: number;
 };
@@ -206,7 +207,7 @@ export async function postLessonNext(body: {
   return j("/lesson/next", { method: "POST", body: JSON.stringify(body) });
 }
 
-export type QuizGenRes = { topic: string; questions: Record<string, unknown>[] };
+export type QuizGenRes = { topic: string; questions: Record<string, unknown>[]; explanations: Record<string, string> };
 
 export async function postQuizGenerate(body: {
   topic: string;
@@ -230,6 +231,7 @@ export async function postQuizSubmit(body: {
   student_id: string;
   answers: Record<string, string>;
   questions: Record<string, unknown>[];
+  explanations: Record<string, string>;
 }): Promise<QuizSubmitRes> {
   return j("/quiz/submit", { method: "POST", body: JSON.stringify(body) });
 }
@@ -263,4 +265,27 @@ export async function postProgressUpdate(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+export type PastLesson = {
+  session_id: string;
+  topic: string;
+  title: string;
+  created_at: string | null;
+  section_count: number;
+  current_index: number;
+  completed: boolean;
+};
+
+export type PastLessonsRes = {
+  student_id: string;
+  lessons: PastLesson[];
+};
+
+export async function getPastLessons(studentId: string): Promise<PastLessonsRes> {
+  return j(`/lessons/past/${encodeURIComponent(studentId)}`);
+}
+
+export async function resumeLesson(sessionId: string): Promise<LessonGenRes> {
+  return j(`/lesson/resume/${encodeURIComponent(sessionId)}`);
 }

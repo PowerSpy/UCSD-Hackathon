@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { Dashboard } from "./pages/Dashboard";
 import { Learn } from "./pages/Learn";
+import { PastLessons } from "./pages/PastLessons";
 import { ProgressPage } from "./pages/ProgressPage";
 import { QuizPage } from "./pages/QuizPage";
 
@@ -16,6 +17,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/learn" element={<Learn />} />
+        <Route path="/lessons/past" element={<PastLessons />} />
         <Route path="/quiz/:topic" element={<QuizPage />} />
         <Route path="/progress" element={<ProgressPage />} />
       </Routes>
