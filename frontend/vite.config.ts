@@ -18,6 +18,7 @@ export default defineConfig({
       "/lesson": "http://127.0.0.1:8000",
       "/quiz": "http://127.0.0.1:8000",
       "/progress": "http://127.0.0.1:8000",
+      "/demo": "http://127.0.0.1:8000",
     },
   },
 });

@@ -1,5 +1,5 @@
-import { postQuizGenerate, postQuizSubmit } from "@/lib/api";
-import { getGradeBand, getStudentId, type GradeBand } from "@/lib/student";
+import { postQuizGenerate, postQuizSubmit, demoQuizGenerate } from "@/lib/api";
+import { getGradeBand, getStudentId, isDemoMode, type GradeBand } from "@/lib/student";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -31,7 +31,8 @@ export function QuizPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await postQuizGenerate({ topic, grade_level: grade, student_id: studentId });
+        const generateFn = isDemoMode() ? demoQuizGenerate : postQuizGenerate;
+        const res = await generateFn({ topic, grade_level: grade, student_id: studentId });
         if (!cancelled) {
           setQuestions(res.questions || []);
           setExplanations(res.explanations || {});

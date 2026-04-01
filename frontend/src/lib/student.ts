@@ -1,5 +1,6 @@
 const STUDENT_KEY = "slc_student_id";
 const GRADE_KEY = "slc_grade_band";
+const DEMO_MODE_KEY = "slc_demo_mode";
 
 export type GradeBand = "K-5" | "6-8" | "9-12";
 
@@ -29,6 +30,22 @@ export function getGradeBand(): GradeBand {
 export function setGradeBand(g: GradeBand): void {
   try {
     localStorage.setItem(GRADE_KEY, g);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function isDemoMode(): boolean {
+  try {
+    return localStorage.getItem(DEMO_MODE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function setDemoMode(enabled: boolean): void {
+  try {
+    localStorage.setItem(DEMO_MODE_KEY, enabled ? "true" : "false");
   } catch {
     /* ignore */
   }

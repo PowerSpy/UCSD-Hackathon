@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import uuid
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -24,6 +25,7 @@ from app.database import Base, engine, get_db
 from app.grade_band import normalize_grade_band
 from app.logging_conf import setup_logging
 from app.models import Student, LessonSession, TopicProgress, LessonHistory, parse_json_list
+from app.demo_data import DEMO_LESSONS, DEMO_QUIZZES
 from app.schemas import (
     ChatRequest,
     ChatResponse,
@@ -720,4 +722,171 @@ def resume_lesson(session_id: str, db: Session = Depends(get_db)):
         section_index=current_idx,
         total_sections=len(outline),
     )
+
+
+# ==================== DEMO ENDPOINTS (for low API credit scenarios) ====================
+
+@app.post("/demo/lesson/generate", response_model=LessonGenerateResponse)
+async def demo_lesson_generate(body: LessonGenerateRequest):
+    """Demo endpoint: return pre-generated lesson data without calling LLM."""
+    topic_slug = body.topic.strip().lower().replace(" ", "_")
+    
+    if topic_slug not in DEMO_LESSONS:
+        raise HTTPException(
+            404,
+            f"Demo lesson '{body.topic}' not available. Try: {', '.join(DEMO_LESSONS.keys())}"
+        )
+    
+    demo_data = DEMO_LESSONS[topic_slug]
+    session_id = body.session_id or str(uuid.uuid4())
+    
+    return LessonGenerateResponse(
+        session_id=session_id,
+        topic=body.topic.strip(),
+        title=demo_data["title"],
+        outline=demo_data["outline"],
+        section=demo_data["sections"][0],
+        section_index=0,
+        total_sections=len(demo_data["sections"]),
+    )
+
+
+@app.post("/demo/lesson/generate/stream")
+@app.get("/demo/lesson/generate/stream")
+async def demo_lesson_generate_stream(
+    topic: str = None,
+    grade_level: str = "6-8",
+    session_id: str = None,
+    student_id: str = None,
+):
+    """Demo endpoint: stream pre-generated lesson sections."""
+    if not topic or not session_id:
+        raise HTTPException(400, "topic and session_id are required")
+    
+    topic_slug = topic.strip().lower().replace(" ", "_")
+    
+    if topic_slug not in DEMO_LESSONS:
+        raise HTTPException(
+            404,
+            f"Demo lesson '{topic}' not available. Try: {', '.join(DEMO_LESSONS.keys())}"
+        )
+    
+    demo_data = DEMO_LESSONS[topic_slug]
+    outline = demo_data["outline"]
+    all_sections = demo_data["sections"]
+    
+    async def event_gen():
+        # Emit outline
+        yield _sse_event({"type": "outline", "outline": outline, "total": len(outline)})
+        
+        # Emit progress for each section
+        for idx in range(len(outline)):
+            yield _sse_event({
+                "type": "progress",
+                "current": idx,
+                "total": len(outline),
+                "section_name": outline[idx],
+            })
+            # Small delay to simulate generation
+            await asyncio.sleep(0.1)
+        
+        # Emit completion
+        yield _sse_event({
+            "type": "done",
+            "session_id": session_id,
+            "topic": topic.strip(),
+            "title": demo_data["title"],
+            "outline": outline,
+            "section": all_sections[0],
+            "sections": all_sections,
+            "section_index": 0,
+            "total_sections": len(outline),
+        })
+    
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/demo/lesson/next", response_model=LessonNextResponse)
+async def demo_lesson_next(body: LessonNextRequest):
+    """Demo endpoint: retrieve next pre-generated section."""
+    topic_slug = body.session_id.lower().replace(" ", "_")
+    
+    # Try to find matching demo lesson (this is a simplified version)
+    # In a real scenario, you'd store the topic with the session
+    for slug, lesson_data in DEMO_LESSONS.items():
+        demo_data = lesson_data
+        break
+    
+    if "demo_data" not in locals():
+        raise HTTPException(400, "Demo lesson data not found")
+    
+    sections = demo_data["sections"]
+    completed = body.completed_section_index
+    outline = demo_data["outline"]
+    
+    if completed < 0 or completed >= len(outline):
+        raise HTTPException(
+            400,
+            f"completed_section_index must be in 0..{len(outline) - 1}, got {completed}",
+        )
+    
+    idx = completed + 1
+    if idx >= len(outline):
+        return LessonNextResponse(
+            section={"type": "done", "title": "Lesson complete", "body": "Great work!", "practice_prompt": None},
+            section_index=len(outline) - 1,
+            total_sections=len(outline),
+            lesson_complete=True,
+        )
+    
+    new_section = sections[idx] if idx < len(sections) else {}
+    is_last = idx >= len(outline) - 1
+    
+    return LessonNextResponse(
+        section=new_section,
+        section_index=idx,
+        total_sections=len(outline),
+        lesson_complete=is_last,
+    )
+
+
+@app.post("/demo/quiz/generate", response_model=QuizGenerateResponse)
+async def demo_quiz_generate(body: QuizGenerateRequest):
+    """Demo endpoint: return pre-generated quiz without calling LLM."""
+    topic_slug = body.topic.strip().lower().replace(" ", "_")
+    
+    if topic_slug not in DEMO_QUIZZES:
+        raise HTTPException(
+            404,
+            f"Demo quiz for '{body.topic}' not available. Try: {', '.join(DEMO_QUIZZES.keys())}"
+        )
+    
+    demo_quiz = DEMO_QUIZZES[topic_slug]
+    
+    return QuizGenerateResponse(
+        topic=body.topic.strip(),
+        questions=demo_quiz["questions"],
+        explanations=demo_quiz["explanations"],
+    )
+
+
+@app.get("/demo/available")
+async def demo_available():
+    """List available demo lessons and quizzes."""
+    lessons = list(DEMO_LESSONS.keys())
+    quizzes = list(DEMO_QUIZZES.keys())
+    return {
+        "available_lessons": lessons,
+        "available_quizzes": quizzes,
+        "note": "Use /demo/* endpoints instead of /lesson/* and /quiz/* endpoints",
+        "chat_endpoint": "Chat still uses /chat and /chat/stream (real API calls)",
+    }
 

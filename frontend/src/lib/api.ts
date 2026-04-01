@@ -289,3 +289,72 @@ export async function getPastLessons(studentId: string): Promise<PastLessonsRes>
 export async function resumeLesson(sessionId: string): Promise<LessonGenRes> {
   return j(`/lesson/resume/${encodeURIComponent(sessionId)}`);
 }
+// ==================== DEMO MODE APIs ====================
+
+export async function demoLessonGenerate(body: {
+  topic: string;
+  grade_level: GradeBand;
+  session_id: string;
+  student_id: string;
+}): Promise<LessonGenRes> {
+  return j("/demo/lesson/generate", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function demoLessonGenerateStream(
+  body: {
+    topic: string;
+    grade_level: GradeBand;
+    session_id: string;
+    student_id: string;
+  },
+  onEvent: (event: LessonGenStreamEvent) => void
+): Promise<void> {
+  const es = new EventSource(
+    `${API_BASE}/demo/lesson/generate/stream?topic=${encodeURIComponent(body.topic)}&grade_level=${encodeURIComponent(body.grade_level)}&session_id=${encodeURIComponent(body.session_id)}&student_id=${encodeURIComponent(body.student_id)}`,
+    {
+      withCredentials: true,
+    }
+  );
+
+  es.addEventListener("message", (e) => {
+    try {
+      const raw = e.data;
+      const data = JSON.parse(raw) as LessonGenStreamEvent;
+      onEvent(data);
+    } catch (err) {
+      console.error("Failed to parse event", err, e);
+    }
+  });
+
+  es.addEventListener("error", () => {
+    es.close();
+  });
+
+  return;
+}
+
+export async function demoLessonNext(body: {
+  session_id: string;
+  completed_section_index: number;
+  student_id?: string;
+}): Promise<LessonNextRes> {
+  return j("/demo/lesson/next", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function demoQuizGenerate(body: {
+  topic: string;
+  grade_level: GradeBand;
+  student_id?: string;
+  prior_performance?: string;
+}): Promise<QuizGenRes> {
+  return j("/demo/quiz/generate", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function getDemoAvailable(): Promise<{
+  available_lessons: string[];
+  available_quizzes: string[];
+  note: string;
+  chat_endpoint: string;
+}> {
+  return j("/demo/available");
+}

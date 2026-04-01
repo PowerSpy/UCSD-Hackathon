@@ -1,7 +1,7 @@
-import { postChatStream, postLessonGenerateStream, postLessonNext, postProgressUpdate, resumeLesson, type LessonGenStreamEvent } from "@/lib/api";
+import { postChatStream, postLessonGenerateStream, postLessonNext, postProgressUpdate, resumeLesson, demoLessonGenerateStream, demoLessonNext, type LessonGenStreamEvent } from "@/lib/api";
 import { ChatPanel, type ChatMessage } from "@/components/ChatPanel";
 import { Markdown } from "@/components/Markdown";
-import { getGradeBand, getStudentId, newSessionId, slugTopic, type GradeBand } from "@/lib/student";
+import { getGradeBand, getStudentId, newSessionId, slugTopic, isDemoMode, type GradeBand } from "@/lib/student";
 import { ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -73,7 +73,8 @@ export function Learn() {
     setSessionId(sid);
     setChatSessionId(newSessionId());
     try {
-      await postLessonGenerateStream({
+      const generateFn = isDemoMode() ? demoLessonGenerateStream : postLessonGenerateStream;
+      await generateFn({
         topic: t,
         grade_level: grade,
         session_id: sid,
@@ -117,7 +118,8 @@ export function Learn() {
     if (!sessionId || loadingNext) return;
     setLoadingNext(true);
     try {
-      const res = await postLessonNext({
+      const nextFn = isDemoMode() ? demoLessonNext : postLessonNext;
+      const res = await nextFn({
         session_id: sessionId,
         completed_section_index: sectionIndex,
         student_id: studentId,

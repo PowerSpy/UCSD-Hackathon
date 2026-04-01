@@ -1,16 +1,18 @@
-import { BookOpen, LineChart, Sparkles } from "lucide-react";
+import { BookOpen, LineChart, Sparkles, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getProgress } from "@/lib/api";
-import { getGradeBand, getStudentId, setGradeBand, type GradeBand } from "@/lib/student";
+import { getGradeBand, getStudentId, setGradeBand, isDemoMode, setDemoMode, type GradeBand } from "@/lib/student";
 
 export function Dashboard() {
   const [grade, setGrade] = useState<GradeBand>("6-8");
   const [streak, setStreak] = useState(0);
   const [weekTopics, setWeekTopics] = useState<string[]>([]);
+  const [demoMode, setDemo] = useState(false);
 
   useEffect(() => {
     setGrade(getGradeBand());
+    setDemo(isDemoMode());
     const sid = getStudentId();
     getProgress(sid)
       .then((p) => {
@@ -27,6 +29,12 @@ export function Dashboard() {
     setGradeBand(g);
   }
 
+  function onDemoToggle() {
+    const newMode = !demoMode;
+    setDemo(newMode);
+    setDemoMode(newMode);
+  }
+
   return (
     <main id="main" className="mx-auto max-w-3xl px-4 py-10 md:py-16">
       <header className="mb-10 text-center">
@@ -38,10 +46,39 @@ export function Dashboard() {
         <p className="mt-4 text-xl text-slate-600">A friendly tutor that asks questions and offers hints — never shortcuts.</p>
       </header>
 
+      {demoMode && (
+        <div className="mb-6 flex items-center gap-2 rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <Zap className="h-5 w-5 text-amber-600" aria-hidden />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-900">Demo Mode Active</p>
+            <p className="text-sm text-amber-800">Using pre-generated lessons & quizzes. Chat still works normally.</p>
+          </div>
+          <button
+            onClick={onDemoToggle}
+            className="rounded-md bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
+          >
+            Disable
+          </button>
+        </div>
+      )}
+
       <section className="mb-10 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-sage/15" aria-labelledby="grade-heading">
-        <h2 id="grade-heading" className="mb-3 font-display text-xl font-semibold text-ink">
-          Your grade band
-        </h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 id="grade-heading" className="font-display text-xl font-semibold text-ink">
+            Your grade band
+          </h2>
+          <button
+            onClick={onDemoToggle}
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition ${
+              demoMode
+                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            <Zap className="h-3 w-3" aria-hidden />
+            {demoMode ? "Demo: ON" : "Demo: OFF"}
+          </button>
+        </div>
         <p className="mb-4 text-lg text-slate-600">We will match vocabulary and examples to how you learn best.</p>
         <div className="flex flex-wrap gap-3" role="radiogroup" aria-label="Grade band">
           {(["K-5", "6-8", "9-12"] as const).map((g) => (
