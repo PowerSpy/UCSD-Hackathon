@@ -30,7 +30,7 @@ class ChatResponse(BaseModel):
 class LessonGenerateRequest(BaseModel):
     topic: str
     grade_level: str = "6-8"
-    session_id: str
+    session_id: str | None = None
     student_id: str | None = None
 
 

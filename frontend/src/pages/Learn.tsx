@@ -73,13 +73,7 @@ export function Learn() {
     setSessionId(sid);
     setChatSessionId(newSessionId());
     try {
-      const generateFn = isDemoMode() ? demoLessonGenerateStream : postLessonGenerateStream;
-      await generateFn({
-        topic: t,
-        grade_level: grade,
-        session_id: sid,
-        student_id: studentId,
-      }, (event: LessonGenStreamEvent) => {
+      const onGeneratingEvent = (event: LessonGenStreamEvent) => {
         // Handle progress updates
         if (event.type === "progress" && event.current !== undefined && event.total !== undefined) {
           setGeneratingProgress({ current: event.current, total: event.total });
@@ -102,7 +96,21 @@ export function Learn() {
         } else if (event.type === "outline" && event.outline) {
           setOutline(event.outline);
         }
-      });
+      };
+
+      if (isDemoMode()) {
+        await demoLessonGenerateStream({ topic: t, grade_level: grade, session_id: sid, student_id: studentId }, onGeneratingEvent);
+      } else {
+        await postLessonGenerateStream(
+          {
+            topic: t,
+            grade_level: grade,
+            session_id: sid,
+            student_id: studentId,
+          },
+          onGeneratingEvent
+        );
+      }
     } catch (err) {
       setGeneratingProgress(null);
       setMessages((m) => [
@@ -123,6 +131,7 @@ export function Learn() {
         session_id: sessionId,
         completed_section_index: sectionIndex,
         student_id: studentId,
+        ...(isDemoMode() && { topic }),
       });
       if (res.lesson_complete) {
         const enc = encodeURIComponent(topic.trim());

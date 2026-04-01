@@ -1,7 +1,7 @@
 import { BookOpen, LineChart, Sparkles, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getProgress } from "@/lib/api";
+import { getProgress, getDemoProgress } from "@/lib/api";
 import { getGradeBand, getStudentId, setGradeBand, isDemoMode, setDemoMode, type GradeBand } from "@/lib/student";
 
 export function Dashboard() {
@@ -14,7 +14,8 @@ export function Dashboard() {
     setGrade(getGradeBand());
     setDemo(isDemoMode());
     const sid = getStudentId();
-    getProgress(sid)
+    const progressFn = isDemoMode() ? getDemoProgress : () => getProgress(sid);
+    progressFn()
       .then((p) => {
         setStreak(p.current_streak);
         setWeekTopics(p.topics_this_week || []);

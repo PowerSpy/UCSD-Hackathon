@@ -1,6 +1,6 @@
 import { ProgressImprovementDemo } from "@/components/ProgressImprovementDemo";
-import { getProgress, postProgressUpdate } from "@/lib/api";
-import { getGradeBand, getStudentId, setGradeBand, type GradeBand } from "@/lib/student";
+import { getProgress, getDemoProgress, postProgressUpdate } from "@/lib/api";
+import { getGradeBand, getStudentId, setGradeBand, isDemoMode, type GradeBand } from "@/lib/student";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -11,7 +11,8 @@ export function ProgressPage() {
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    getProgress(sid)
+    const progressFn = isDemoMode() ? getDemoProgress : () => getProgress(sid);
+    progressFn()
       .then(setData)
       .catch(() => setErr("Could not load progress. Is the API running?"));
   }, [sid]);

@@ -752,18 +752,13 @@ async def demo_lesson_generate(body: LessonGenerateRequest):
 
 
 @app.post("/demo/lesson/generate/stream")
-@app.get("/demo/lesson/generate/stream")
-async def demo_lesson_generate_stream(
-    topic: str = None,
-    grade_level: str = "6-8",
-    session_id: str = None,
-    student_id: str = None,
-):
+async def demo_lesson_generate_stream(body: LessonGenerateRequest):
     """Demo endpoint: stream pre-generated lesson sections."""
-    if not topic or not session_id:
-        raise HTTPException(400, "topic and session_id are required")
+    topic = body.topic.strip()
+    grade_level = body.grade_level or "6-8"
+    session_id = body.session_id or str(uuid.uuid4())
     
-    topic_slug = topic.strip().lower().replace(" ", "_")
+    topic_slug = topic.lower().replace(" ", "_")
     
     if topic_slug not in DEMO_LESSONS:
         raise HTTPException(
@@ -794,7 +789,7 @@ async def demo_lesson_generate_stream(
         yield _sse_event({
             "type": "done",
             "session_id": session_id,
-            "topic": topic.strip(),
+            "topic": topic,
             "title": demo_data["title"],
             "outline": outline,
             "section": all_sections[0],

@@ -14,11 +14,30 @@ export default defineConfig({
         target: "http://127.0.0.1:8000",
         changeOrigin: true,
       },
-      "/chat": "http://127.0.0.1:8000",
-      "/lesson": "http://127.0.0.1:8000",
-      "/quiz": "http://127.0.0.1:8000",
-      "/progress": "http://127.0.0.1:8000",
-      "/demo": "http://127.0.0.1:8000",
+      "/demo/lesson/generate/stream": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/chat": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/lesson": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/quiz": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/progress": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+      "/demo": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
     },
   },
 });
